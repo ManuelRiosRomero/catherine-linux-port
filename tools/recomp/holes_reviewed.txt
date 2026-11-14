@@ -1,0 +1,23 @@
+# Holes judged not to be real code (FixHoles.java dry run, 2026-10-22). readiness.py does not count them as gaps.
+# padding: the hole is alignment padding (00/CC) before an aligned function; called: the function just after it is
+# CALLed, so it is real and the hole's source is junk; no-cover / no-decode: the bytes at the hole are not an
+# instruction that reaches the function.
+40a3df padding
+42c6ca called
+574c0f padding
+59ae4b padding
+669223 padding
+669e6a called
+66b0ef called
+66fbda called
+67269e called
+673f9f no-cover
+6f3707 no-cover
+70b990 no-cover
+7305cb padding
+73c81d no-decode
+746a5f called
+78823b padding
+788264 called
+788ee1 called
+a37c66 no-cover

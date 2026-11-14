@@ -1,0 +1,9 @@
+# misdecodes.py hits reviewed by hand as data, not code (2026-10-26). readiness.sh does not count them.
+# exe: the source is junk inside a real function (SCASB/JNS into "or byte ptr [eax],cl" runs; a JNP right after a RET)
+6784c6
+747e63
+# d3dx9 / D3DCompiler: text strings decoded as code ("o\0zi", "_bimy", "srro")
+50111e9
+60355b3
+610d3dc
+612c210

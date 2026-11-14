@@ -1,0 +1,14 @@
+# Everything derived from the game's own files stays local and is never committed or shared.
+# build/ holds exports, Ghidra projects, logs and caches: ignored, except our own helper scripts.
+build/*
+!build/*.sh
+!build/*.ps1
+!build/dbg/
+build/dbg/*
+!build/dbg/*.py
+!build/dbg/*.sh
+*.pcode.txt
+gen/
+# local Claude Code permissions
+.claude/settings.local.json
+__pycache__/
