@@ -8,6 +8,24 @@ is made from Atlus's game and Microsoft's DLLs, so please don't share it with an
 
 Unofficial fan project, not connected to Atlus or Sega. Use it at your own risk.
 
+## Technical highlights
+
+- **Static recompilation, not emulation.** Ghidra decodes `Catherine.exe` (36,288 functions, 1.85 million x86
+  instructions) and two Microsoft DirectX DLLs; a Python lifter (`tools/recomp/lift.py`) turns them into C, which GCC
+  compiles to native x86-64. No Wine, no Proton, no interpreter at run time.
+- **All 777 Windows imports reimplemented** in ~6,300 lines of C/C++ (`runtime/host/`): Win32, the MSVC C/C++
+  runtime, input, GDI text on FreeType, movies on FFmpeg, the CRI sound mixer on SDL3, Direct3D 9 to Vulkan through
+  DXVK, and a bridge to the real Steam client (achievements, leaderboards, Steam Cloud saves shared with Windows).
+- **Correctness checked by differential testing:** each translated function runs from identical random states both
+  as C and as the original x86 bytes in the Unicorn emulator, and registers and memory are compared. The movie code
+  passes 680/680; the SIMD, x87 and random-sample suites are held to a fixed baseline of known differences, so a
+  lifter change that breaks anything shows up at once.
+- **Problems found by measuring:** keeping CPU registers in C locals and fixing a sound-mixer lock that stalled the
+  main thread every frame took the bar scene from 33 to 70 FPS; per-frame cursor warps leaked a file handle each in the Deck's compositor and would have frozen the game after
+  ~2 hours. Both fixed; the game runs at 60-90 FPS on a Steam Deck.
+- **One-command, owner-only build:** the installer checks the player's game by hash and builds everything from it in
+  a throwaway container (~45 minutes on a Deck). No game code or anything derived from it is ever distributed.
+
 ## Install
 
 You need: the game installed from Steam, about 10 GB free while building, and the charger plugged in.
