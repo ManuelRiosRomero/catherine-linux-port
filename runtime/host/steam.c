@@ -153,15 +153,32 @@ static void action_scripted(uint64_t h, unsigned __int128 *r) {   // ControllerD
     for (int i = 0; i < n_actions; i++) {
         if (actions[i].handle != h) continue;
         if (s & actions[i].bit) ((uint8_t *)r)[0] = ((uint8_t *)r)[1] = 1;
-        static int last_a = -1, logged;   // input diagnosis: BTN_A edges as Steam Input reports them (first 200)
-        int a = ((uint8_t *)r)[0];
-        if (actions[i].bit == 0x1000 && a != last_a && logged++ < 200)
-            fprintf(stderr, "[input] steam BTN_A %d (active %d) at %llu ms\n", a, ((uint8_t *)r)[1], (unsigned long long)SDL_GetTicks());
-        if (actions[i].bit == 0x1000) last_a = a;
     }
+}
+// input diagnosis: every digital action as Steam Input reports it, per (controller, action) and caller (first 400 changes)
+static void log_digital(uint64_t pad, uint64_t h, unsigned __int128 r, uint32_t caller) {
+    static struct { uint64_t pad, h; int v; } last[64];
+    static int n, logged;
+    int i, v = (int)(r & 0xFFFF), bit = 0;
+    for (i = 0; i < n_actions; i++) if (actions[i].handle == h) bit = actions[i].bit;
+    if (logged >= 400) return;
+    for (i = 0; i < n && !(last[i].pad == pad && last[i].h == h); i++) {}
+    if (i == n) { if (n == 64) return; last[n].pad = pad, last[n].h = h, last[n++].v = -1; }
+    if (last[i].v == v) return;
+    last[i].v = v;
+    logged++;
+    fprintf(stderr, "[input] steam %s pad %llx action %llx state %d active %d (from %08x) at %llu ms\n",
+            bit == 0x1000 ? "A" : bit == 0x2000 ? "B" : bit == 0x10 ? "START" : "button", (unsigned long long)pad, (unsigned long long)h, v & 0xFF,
+            v >> 8, caller, (unsigned long long)SDL_GetTicks());
 }
 // ControllerAnalogActionData_t { int32 eMode; float x, y; bool bActive }: the scripted D-pad pushes the Move stick fully
 static void analog_scripted(uint64_t h, unsigned __int128 *r) {
+    static int logged, held[64];   // input diagnosis: analog actions other than the sticks crossing 0.25 (first 100)
+    float v;
+    memcpy(&v, (uint8_t *)r + 4, 4);
+    if (h > 2 && h < 64 && (v > .25f) != held[h] && logged++ < 100)
+        held[h] = v > .25f, fprintf(stderr, "[input] steam analog action %llx %.2f at %llu ms\n", (unsigned long long)h, v,
+                                    (unsigned long long)SDL_GetTicks());
     uint16_t s = input_scripted();
     if (h != move_handle || !(s & 0xF)) return;
     float x = (s & 8 ? 1.f : 0.f) - (s & 4 ? 1.f : 0.f), y = (s & 1 ? 1.f : 0.f) - (s & 2 ? 1.f : 0.f);
@@ -203,24 +220,45 @@ static void steam_method(CPU *c) {
     }
     unsigned __int128 r2 = noop ? 0 : VT(wr->native, idx)(wr->native, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
     if ((!strcmp(sp->name, "GetDigitalActionHandle") || !strcmp(sp->name, "GetAnalogActionHandle")) && a[0]) {
-        static char seen[2048];   // log each action name once: shows what the game binds
+        static char seen[4096];   // log each action name + handle once: shows what the game binds
         const char *nm = (const char *)(uintptr_t)a[0];
-        char key[80];
-        snprintf(key, sizeof key, "|%s|", nm);
+        char key[96];
+        snprintf(key, sizeof key, "|%s=%llx|", nm, (unsigned long long)(uint64_t)r2);
         if (!strstr(seen, key) && strlen(seen) + strlen(key) < sizeof seen) {
             strcat(seen, key);
             fprintf(stderr, "[steam] input action %s %s -> %llx\n", sp->name + 3, nm, (unsigned long long)(uint64_t)r2);
         }
         action_handle(nm, (uint64_t)r2, sp->name[3] == 'A');
     }
-    if (!strcmp(sp->name, "GetConnectedControllers")) steam_input_pads = (int)(uint32_t)r2;
+    if (!strcmp(sp->name, "GetConnectedControllers")) {
+        static uint64_t seen_pads[2];   // log the controller list when it changes
+        uint64_t *h = (uint64_t *)(uintptr_t)a[0];
+        uint64_t now_pads[2] = {(uint32_t)r2 > 0 && h ? h[0] : 0, (uint32_t)r2 > 1 && h ? h[1] : 0};
+        if ((int)(uint32_t)r2 != steam_input_pads || memcmp(now_pads, seen_pads, sizeof now_pads))
+            fprintf(stderr, "[input] steam controllers %u: %llx %llx\n", (uint32_t)r2, (unsigned long long)now_pads[0],
+                    (unsigned long long)now_pads[1]);
+        memcpy(seen_pads, now_pads, sizeof now_pads);
+        steam_input_pads = (int)(uint32_t)r2;
+    }
+    if (!strcmp(sp->name, "ActivateActionSet")) {
+        static struct { uint64_t pad, set; } sets[8];   // log action-set switches per controller (the game repeats them every frame)
+        static int n_sets;
+        int i = 0;
+        while (i < n_sets && sets[i].pad != a[0]) i++;
+        if (i == n_sets && n_sets < 8) sets[n_sets].pad = a[0], sets[n_sets++].set = ~0ull;
+        if (i < n_sets && sets[i].set != a[1]) {
+            sets[i].set = a[1];
+            fprintf(stderr, "[input] steam ActivateActionSet pad %llx set %llx (from %08x)\n", (unsigned long long)a[0],
+                    (unsigned long long)a[1], U32(REG(c, R_ESP)));
+        }
+    }
     // LeaderboardEntry_t { CSteamID; int32 rank, score, details; UGCHandle_t }: the first 20 bytes agree; the UGC
     // handle sits at 20 (Linux, pack 4) or 24 (Windows, pack 8). The game attaches no files: report none, Windows layout.
     if (!strcmp(sp->name, "GetDownloadedLeaderboardEntry") && a[2]) {
         memset((uint8_t *)(uintptr_t)a[2] + 20, 0, 4);
         memset((uint8_t *)(uintptr_t)a[2] + 24, 0xFF, 8);   // k_UGCHandleInvalid
     }
-    if (!strcmp(sp->name, "GetDigitalActionData")) action_scripted(a[1], &r2);
+    if (!strcmp(sp->name, "GetDigitalActionData")) action_scripted(a[1], &r2), log_digital(a[0], a[1], r2, U32(REG(c, R_ESP)));
     if (!strcmp(sp->name, "GetAnalogActionData")) analog_scripted(a[1], &r2);
     uint64_t r = (uint64_t)r2;
     switch (sp->ret) {

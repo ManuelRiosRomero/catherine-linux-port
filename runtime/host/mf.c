@@ -205,7 +205,20 @@ M(IMFVideoDisplayControl, GetCurrentImage, 5) {
                 U32(lock + 4), gsize(U32(lock + 4)), U32(lock + 8), REG(c, 0xc), U32(ebp - 0x4c));
     }
     uint32_t row = p->w * 4, size = row * p->h, dib = gmalloc(size), bih = ARG(c, 1);
-    for (int y = 0; y < p->h; y++) memcpy(GM(dib + y * row), p->frame + (size_t)(p->h - 1 - y) * row, row);   // bottom-up
+    int ch = aspect_movie_rows(p->w, p->h), top = (p->h - ch) / 2;   // 16:10 screen: picture rows, black above/below
+    if (ch == p->h)
+        for (int y = 0; y < p->h; y++) memcpy(GM(dib + y * row), p->frame + (size_t)(p->h - 1 - y) * row, row);   // bottom-up
+    else {
+        memset(GM(dib), 0, size);
+        for (int y = 0; y < ch; y++) {   // linear between the two nearest source rows
+            float sy = (y + 0.5f) * p->h / ch - 0.5f;
+            int y0 = sy < 0 ? 0 : (int)sy, y1 = y0 + 1 < p->h ? y0 + 1 : y0;
+            unsigned f = (unsigned)((sy - y0) * 256), g = 256 - f;
+            const uint8_t *a = p->frame + (size_t)y0 * row, *b2 = p->frame + (size_t)y1 * row;
+            uint8_t *d = GM(dib + (p->h - 1 - (top + y)) * row);
+            for (uint32_t k = 0; k < row; k++) d[k] = (uint8_t)((a[k] * g + b2[k] * f) >> 8);
+        }
+    }
     int32_t *b = (int32_t *)GM(bih);
     b[0] = 40; b[1] = p->w; b[2] = p->h; b[3] = 1 | 32 << 16; b[4] = 0; b[5] = (int32_t)size;
     b[6] = b[7] = b[8] = b[9] = 0;

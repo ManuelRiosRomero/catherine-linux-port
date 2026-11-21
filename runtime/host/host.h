@@ -56,6 +56,8 @@ uint32_t dll_is_loaded(uint32_t h);
 uint32_t dll_export(uint32_t base, uint32_t name);
 uint32_t stdio_iob(void);       // stdio.c: msvcrt's _iob[3] (stdin, stdout, stderr)
 Fn steam_resolve(uint32_t t);   // steam.c: guest Steam interface method stubs
+void aspect_init(int sw, int sh);   // aspect.c: 16:10 picture once the screen size is known
+int aspect_movie_rows(int w, int h);   // aspect.c: rows of picture for a 16:9 movie frame (letterboxed on 16:10)
 Fn d3d9_resolve(uint32_t t);    // d3d9_bridge.cpp: guest D3D9 COM method stubs
 
 // threads (sync.c)

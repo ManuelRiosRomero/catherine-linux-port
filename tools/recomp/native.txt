@@ -1,3 +1,4 @@
 # Guest functions the lifter leaves out of a full ("all") lift: calls to them go to the host's NATIVE() replacements.
 6a96d0  # WmvPlayer::OpenURL: builds the Media Foundation pipeline -> runtime/host/mf.c (ffmpeg via runtime/movie.c)
 7a4b10  # CRI dummy sound output worker thread: mixes and drops the samples -> runtime/host/cri.c (plays them via SDL3)
+7cb790  # NiCamera::SetViewFrustum: 16:9 frustums widened vertically on a taller screen -> runtime/host/aspect.c
