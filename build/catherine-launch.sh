@@ -29,5 +29,5 @@ fi
 [ -f $P/launch.env ] && . $P/launch.env
 # reference runs: CATH_PROTON=1 in launch.env hands Steam's own command back, so the Windows game runs under Proton
 [ -n "$CATH_PROTON" ] && { echo "[launch] $(date '+%F %T') CATH_PROTON: running Steam's Proton command" > $P/last_run.log; exec "$@"; }
-{ echo "[launch] $(date '+%F %T') args: $*"; env | grep -E '^(DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR|SteamAppId|SDL_VIDEO_DRIVER|STEAM_COMPAT_DATA_PATH|CATH_CLOUD_SAVE)='; } > $P/last_run.log
+{ echo "[launch] $(date '+%F %T') args: $*"; env | grep -E '^(DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR|SteamAppId|SDL_VIDEO_DRIVER|STEAM_COMPAT_DATA_PATH|CATH_CLOUD_SAVE|CATH_ASPECT)='; } > $P/last_run.log
 exec $P/catherine ./Catherine.exe >> $P/last_run.log 2>&1

@@ -9,8 +9,15 @@
 #include <string.h>
 
 static float screen_aspect;   // width / height of the screen, 0 = leave the game's 16:9 alone
+static int full_scene = 1;    // scene images at the screen's size (else 16:9-sized, stretched to the screen)
 
+// The player picks the look with CATH_ASPECT in Steam's Launch Options (CATH_ASPECT=16:9 .../catherine-launch.sh %command%):
+// unset or "fill" = 16:10 at full resolution, "fill720" = 16:10 from a 1280x720 scene image, "16:9" = the original bands.
 void aspect_init(int sw, int sh) {   // user32.c, once the screen size is known
+    const char *mode = getenv("CATH_ASPECT");
+    if (mode && !strcmp(mode, "16:9")) { fprintf(stderr, "[aspect] CATH_ASPECT=16:9: original 16:9 picture\n"); return; }
+    if (mode && strcmp(mode, "fill") && strcmp(mode, "fill720")) fprintf(stderr, "[aspect] CATH_ASPECT=%s unknown: using fill\n", mode);
+    full_scene = !(mode && !strcmp(mode, "fill720"));
     if (sw <= 0 || sh <= 0 || (float)sw / sh > 16.f / 9 - 0.01f) return;   // 16:9 or wider: nothing to do
     screen_aspect = (float)sw / sh;
     float hw = (float)sh / sw;
@@ -26,7 +33,7 @@ void aspect_init(int sw, int sh) {   // user32.c, once the screen size is known
 // 1280x800), so the 3D scene is drawn at full resolution instead of stretched. Startup (640x480), device-lost Resets
 // (already 800) and 16:9 screens are left alone.
 void aspect_scene_size(uint32_t bw, uint32_t bh) {
-    if (!screen_aspect || V(GM(0xcd734c), uint32_t) != bw || V(GM(0xcd7350), uint32_t) != bw * 9 / 16 || bh <= bw * 9 / 16) return;
+    if (!screen_aspect || !full_scene || V(GM(0xcd734c), uint32_t) != bw || V(GM(0xcd7350), uint32_t) != bw * 9 / 16 || bh <= bw * 9 / 16) return;
     V(GM(0xcd7350), uint32_t) = bh;
     fprintf(stderr, "[aspect] scene images %ux%u (was %ux%u)\n", bw, bh, bw, bw * 9 / 16);
 }
