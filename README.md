@@ -56,9 +56,9 @@ the build pauses and carries on when you wake it.
 - **Saves:** if you've played on Proton on this Deck, the port uses that same save, so Steam Cloud keeps syncing it with
   your PC, and it keeps a copy of the last 30 saves in `~/catherine-port/save-backups`. Otherwise it keeps its own save
   in `~/.local/share/catherine-port`, and that one isn't synced.
-- **Fills the 16:10 screen.** The original draws 16:9 with black bands on the Deck; the port shows a little more
-  of the scene above and below instead (nothing is stretched). Movies keep their 16:9 shape. Set Resolution to
-  1280x800 in the game's Display options.
+- **Fills the 16:10 screen.** The original draws 16:9 with black bands on the Deck; the port renders the full
+  1280x800 and shows a little more of the scene above and below instead (nothing is stretched). Movies keep their
+  16:9 shape. Menus and text are drawn about 11% taller than in the original.
 - **Steam Deck only so far.** It has only been tested on SteamOS.
 - **Game stopped or crashed?** The log is `~/catherine-port/last_run.log`. Its last `catherine:` lines say why.
 

@@ -109,48 +109,6 @@ static uint32_t guest_hwnd(HWND n) {
     return it == hwnd_of_native.end() ? 0 : it->second;
 }
 
-// aspect-ratio diagnosis: distinct viewports / render targets / depth buffers the game asks for, with the guest caller
-static Fn orig_viewport, orig_texture, orig_rt, orig_depth;
-static void guest_stack(CPU *c, const char *what);
-static void log_once(const char *fmt, uint32_t a, uint32_t b, uint32_t c2, uint32_t d, uint32_t e, uint32_t caller) {
-    static std::vector<std::string> seen;
-    char line[200];
-    snprintf(line, sizeof line, fmt, a, b, c2, d, e, caller);
-    for (auto &s : seen) if (s == line) return;
-    if (seen.size() < 80) { seen.push_back(line); fprintf(stderr, "%s\n", line); }
-}
-static void log_viewport(CPU *c) {   // SetViewport(this, D3DVIEWPORT9* {X, Y, Width, Height, MinZ, MaxZ})
-    uint32_t v = ARG(c, 1);
-    log_once("[d3d9] viewport %u,%u %ux%u (z %u) from %08x", U32(v), U32(v + 4), U32(v + 8), U32(v + 12), 0, U32(REG(c, R_ESP)));
-    static int traced;
-    if (U32(v + 8) == 1280 && U32(v + 12) == 800 && traced++ < 3) guest_stack(c, "viewport 1280x800");
-    orig_viewport(c);
-}
-static void guest_stack(CPU *c, const char *what) {   // likely return addresses on the guest stack (code range), innermost first
-    std::string s;
-    char b[16];
-    uint32_t esp = REG(c, R_ESP);
-    for (uint32_t k = 0, n = 0; k < 0x600 && n < 16; k += 4) {
-        uint32_t v = U32(esp + k);
-        if (v >= 0x401000 && v < 0xab6000) { snprintf(b, sizeof b, " %08x", v); s += b; n++; }
-    }
-    fprintf(stderr, "[d3d9] %s stack:%s\n", what, s.c_str());
-}
-static void log_texture(CPU *c) {   // CreateTexture(this, w, h, levels, usage, format, pool, out, share): usage 1 = render target
-    if (ARG(c, 4) & 1) log_once("[d3d9] render target texture %ux%u levels %u usage %x format %u from %08x", ARG(c, 1), ARG(c, 2), ARG(c, 3), ARG(c, 4), ARG(c, 5), U32(REG(c, R_ESP)));
-    static int traced;
-    if ((ARG(c, 4) & 1) && ARG(c, 1) == 1280 && (ARG(c, 2) == 720 || ARG(c, 2) == 800) && traced++ < 6) guest_stack(c, ARG(c, 2) == 720 ? "rt 1280x720" : "rt 1280x800");
-    orig_texture(c);
-}
-static void log_rt(CPU *c) {   // CreateRenderTarget(this, w, h, format, ms, msq, lockable, out, share)
-    log_once("[d3d9] render target surface %ux%u format %u ms %u %u from %08x", ARG(c, 1), ARG(c, 2), ARG(c, 3), ARG(c, 4), 0, U32(REG(c, R_ESP)));
-    orig_rt(c);
-}
-static void log_depth(CPU *c) {   // CreateDepthStencilSurface(this, w, h, format, ms, msq, discard, out, share)
-    log_once("[d3d9] depth surface %ux%u format %u ms %u %u from %08x", ARG(c, 1), ARG(c, 2), ARG(c, 3), ARG(c, 4), 0, U32(REG(c, R_ESP)));
-    orig_depth(c);
-}
-
 // main.c fallback: stub address -> generated forwarder
 extern "C" Fn d3d9_resolve(uint32_t t) {
     if (t < G_D3D || t >= G_D3D + 16 * 256 * 64) return nullptr;
@@ -158,13 +116,6 @@ extern "C" Fn d3d9_resolve(uint32_t t) {
     if ((int)type >= iface_count || (int)i >= iface_method_count[type]) die("d3d9: bad stub %08x", t);
     static const bool trace_d3d = getenv("CATH_TRACE_D3D");   // once: this runs on every D3D9 call
     if (trace_d3d) fprintf(stderr, "[d3d9] %s::%s\n", iface_names[type], iface_method_names[type][i]);
-    const char *m = iface_method_names[type][i];
-    if (!strncmp(iface_names[type], "IDirect3DDevice9", 16)) {
-        if (!strcmp(m, "SetViewport")) { orig_viewport = iface_methods[type][i]; return log_viewport; }
-        if (!strcmp(m, "CreateTexture")) { orig_texture = iface_methods[type][i]; return log_texture; }
-        if (!strcmp(m, "CreateRenderTarget")) { orig_rt = iface_methods[type][i]; return log_rt; }
-        if (!strcmp(m, "CreateDepthStencilSurface")) { orig_depth = iface_methods[type][i]; return log_depth; }
-    }
     return iface_methods[type][i];
 }
 
@@ -230,6 +181,7 @@ void special_Reset(CPU *c, int) {   // (this, pp*)
     auto *dev = (IDirect3DDevice9 *)nat(ARG(c, 0));
     D3DPRESENT_PARAMETERS pp;
     pp_in(ARG(c, 1), &pp);
+    aspect_scene_size(pp.BackBufferWidth, pp.BackBufferHeight);   // 16:10: scene images at the screen's size (aspect.c)
     HRESULT r = dev->Reset(&pp);
     pp_out(&pp, ARG(c, 1));
     ret_std(c, (uint32_t)r, 2);

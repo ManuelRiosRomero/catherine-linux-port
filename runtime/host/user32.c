@@ -349,9 +349,6 @@ static void pump(void) {   // SDL events -> WM_* messages for the main window
             break;
         case SDL_EVENT_WINDOW_RESIZED: {
             Win *w = win(h);
-            static int logged;   // window diagnosis: sizes the display server reports (first 20)
-            if (w && logged++ < 20)
-                fprintf(stderr, "[user32] resized %08x to %dx%d (was %dx%d)\n", h, e.window.data1, e.window.data2, w->w, w->h);
             if (w) { w->w = e.window.data1; w->h = e.window.data2; }
             post(h, 0x05, 0, (uint32_t)(e.window.data2 << 16 | (e.window.data1 & 0xFFFF)));   // WM_SIZE, SIZE_RESTORED
             break;
@@ -447,10 +444,6 @@ static void place(CPU *c, uint32_t h, int x, int y, int ww, int hh, int move, in
     WCOUNT(move ? "SetWindowPos/MoveWindow (move)" : "SetWindowPos (no move)");
     Win *w = win(h);
     if (!w) return;
-    static int logged;   // window diagnosis: placements that change something (first 40)
-    if (((move && (x != w->x || y != w->y)) || (size && (ww != w->w || hh != w->h))) && logged++ < 40)
-        fprintf(stderr, "[user32] place %08x pos %d,%d size %dx%d (move %d size %d, was %d,%d %dx%d) from %08x\n", h, x, y,
-                ww, hh, move, size, w->x, w->y, w->w, w->h, U32(REG(c, R_ESP)));
     if (move) { w->x = x; w->y = y; if (w->sdl) SDL_SetWindowPosition(w->sdl, x, y); }
     if (size && ww > 0 && hh > 0 && (ww != w->w || hh != w->h)) {
         w->w = ww; w->h = hh;
@@ -538,18 +531,8 @@ static uint32_t key_state(uint32_t vk) {   // 0x8000 = down
     for (size_t i = 0; i < NKEYS; i++) if (keys[i].vk == vk && ks[keys[i].sdl]) return 0x8000;
     return 0;
 }
-static uint32_t key_state_logged(uint32_t vk, uint32_t caller) {   // input diagnosis: state changes per key (first 200)
-    static uint8_t last[256];
-    static int logged;
-    uint32_t s = key_state(vk);
-    if (vk < 256 && !!s != last[vk] && logged < 200)
-        logged++, fprintf(stderr, "[input] key vk %02x %s (from %08x) at %llu ms\n", vk, s ? "down" : "up", caller,
-                          (unsigned long long)SDL_GetTicks());
-    if (vk < 256) last[vk] = !!s;
-    return s;
-}
-IMP(U, GetAsyncKeyState) { ret_std(c, key_state_logged(ARG(c, 0), U32(REG(c, R_ESP))), 1); }
-IMP(U, GetKeyState) { ret_std(c, key_state_logged(ARG(c, 0), U32(REG(c, R_ESP))) ? 0xFF80 : 0, 1); }   // SHORT: high bit = down
+IMP(U, GetAsyncKeyState) { ret_std(c, key_state(ARG(c, 0)), 1); }
+IMP(U, GetKeyState) { ret_std(c, key_state(ARG(c, 0)) ? 0xFF80 : 0, 1); }   // SHORT: high bit = down
 IMP(U, keybd_event) { ret_std(c, 0, 4); }
 IMP(U, MapVirtualKeyW) {   // (code, type): 0 VK->scan, 1 scan->VK, 2 VK->char, 3 scan->VK (left/right)
     uint32_t code = ARG(c, 0), type = ARG(c, 1), r = 0;

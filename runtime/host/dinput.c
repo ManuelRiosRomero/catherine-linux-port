@@ -130,16 +130,10 @@ D(EnumObjects) {
 
 // current state in DirectInput layout: keyboard 256 bytes; mouse DIMOUSESTATE2 = lX, lY, lZ, 8 buttons (20 bytes)
 static void snapshot(int kind, uint8_t *out) {
-    if (kind == K_KEYBOARD) input_keys(out);
-    else { int32_t d[3]; input_mouse(d, out + 12); memcpy(out, d, 12); }
-    static uint8_t seen[3][256];   // input diagnosis: key / mouse button edges the game can see (first 200)
-    static int logged;
-    for (int i = kind == K_KEYBOARD ? 0 : 12; i < (kind == K_KEYBOARD ? 256 : 20) && logged < 200; i++)
-        if ((out[i] ^ seen[kind][i]) & 0x80)
-            logged++, fprintf(stderr, "[input] dinput %s %d %s at %u ms\n", kind == K_KEYBOARD ? "key" : "mouse button",
-                              kind == K_KEYBOARD ? i : i - 12, out[i] & 0x80 ? "down" : "up", ms_now());
-    if (kind == K_KEYBOARD) memcpy(seen[kind], out, 256);
-    else memcpy(seen[kind] + 12, out + 12, 8);
+    if (kind == K_KEYBOARD) { input_keys(out); return; }
+    int32_t d[3];
+    input_mouse(d, out + 12);
+    memcpy(out, d, 12);
 }
 D(GetDeviceState) {   // (this, size, data)
     uint8_t s[256];
