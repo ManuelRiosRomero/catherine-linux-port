@@ -2,3 +2,8 @@
 6a96d0  # WmvPlayer::OpenURL: builds the Media Foundation pipeline -> runtime/host/mf.c (ffmpeg via runtime/movie.c)
 7a4b10  # CRI dummy sound output worker thread: mixes and drops the samples -> runtime/host/cri.c (plays them via SDL3)
 7cb790  # NiCamera::SetViewFrustum: 16:9 frustums widened vertically on a taller screen -> runtime/host/aspect.c
+87fac0  # NiScreenElements::SetRectangle: full-screen 2D stays full-screen under the UI band -> runtime/host/aspect.c
+87f9f0  # NiScreenElements::SetVertices: same
+87f960  # NiScreenElements::SetVertex: same
+7cbe40  # NiCamera::WorldPtToScreenPt: UI callers get y moved into the 16:9 UI band -> runtime/host/aspect.c
+7cc010  # NiCamera::WorldPtToScreenPt (with depth): same -> runtime/host/aspect.c

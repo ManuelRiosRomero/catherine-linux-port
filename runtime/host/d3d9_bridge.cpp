@@ -109,6 +109,12 @@ static uint32_t guest_hwnd(HWND n) {
     return it == hwnd_of_native.end() ? 0 : it->second;
 }
 
+static void ui_transform(CPU *c) {   // IDirect3DDevice9(Ex)::SetTransform (COM slot 44): 2D UI band (aspect.c)
+    static const int d9 = iface_type("IDirect3DDevice9");
+    aspect_ui_projection(c);
+    iface_methods[d9][44](c);   // the plain forwarder serves Ex objects too (same slot)
+}
+
 // main.c fallback: stub address -> generated forwarder
 extern "C" Fn d3d9_resolve(uint32_t t) {
     if (t < G_D3D || t >= G_D3D + 16 * 256 * 64) return nullptr;
@@ -116,6 +122,9 @@ extern "C" Fn d3d9_resolve(uint32_t t) {
     if ((int)type >= iface_count || (int)i >= iface_method_count[type]) die("d3d9: bad stub %08x", t);
     static const bool trace_d3d = getenv("CATH_TRACE_D3D");   // once: this runs on every D3D9 call
     if (trace_d3d) fprintf(stderr, "[d3d9] %s::%s\n", iface_names[type], iface_method_names[type][i]);
+    static const int d9 = iface_type("IDirect3DDevice9"), d9x = iface_type("IDirect3DDevice9Ex");
+    static const bool slot_ok = !strcmp(iface_method_names[d9][44], "SetTransform") || (die("d3d9: slot 44 is %s", iface_method_names[d9][44]), 0);
+    if (i == 44 && ((int)type == d9 || (int)type == d9x) && slot_ok) return ui_transform;
     return iface_methods[type][i];
 }
 

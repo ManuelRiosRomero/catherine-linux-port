@@ -58,10 +58,12 @@ the build pauses and carries on when you wake it.
   in `~/.local/share/catherine-port`, and that one isn't synced.
 - **Fills the 16:10 screen.** The original draws 16:9 with black bands on the Deck; the port renders the full
   1280x800 and shows a little more of the scene above and below instead (nothing is stretched). Movies keep their
-  16:9 shape. Menus and text are drawn about 11% taller than in the original.
-  To choose the picture, put `CATH_ASPECT=...` in front of the Launch Options line, e.g.
-  `CATH_ASPECT=16:9 /home/deck/catherine-port/catherine-launch.sh %command%`: `16:9` = the original look with
-  bands, `fill720` = fills the screen from a 1280x720 image (softer), nothing or `fill` = the default.
+  16:9 shape, and menus and text keep their original proportions (centred, with a little room above and below).
+  To choose the picture, put settings in front of the Launch Options line, e.g.
+  `CATH_ASPECT=16:9 /home/deck/catherine-port/catherine-launch.sh %command%`:
+  `CATH_ASPECT=16:9` = the original look with bands, `CATH_ASPECT=fill720` = fills the screen from a 1280x720 image
+  (softer), `CATH_UI=stretch` = menus and text stretched over the whole screen (about 11% taller). Nothing = the
+  default (full 16:10 picture, true-shape menus).
 - **Steam Deck only so far.** It has only been tested on SteamOS.
 - **Game stopped or crashed?** The log is `~/catherine-port/last_run.log`. Its last `catherine:` lines say why.
 

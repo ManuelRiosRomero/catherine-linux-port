@@ -205,7 +205,12 @@ M(IMFVideoDisplayControl, GetCurrentImage, 5) {
                 U32(lock + 4), gsize(U32(lock + 4)), U32(lock + 8), REG(c, 0xc), U32(ebp - 0x4c));
     }
     uint32_t row = p->w * 4, size = row * p->h, dib = gmalloc(size), bih = ARG(c, 1);
-    int ch = aspect_movie_rows(p->w, p->h), top = (p->h - ch) / 2;   // 16:10 screen: picture rows, black above/below
+    // the movie object (AwWmvWin32Movie, vtable 0xb964c0) owning this player: its frame update 0x6a8c30 calls our caller
+    // 0x6a9860 (EBP frame, returns to 0x6a8d0a) with ESI = movie, saved at [EBP-0x5c]; +0x24 = draws its own full-canvas
+    // sprite, +0x58 = its WmvPlayer. Not found = treated as an own sprite (letterboxed as before).
+    uint32_t mebp = REG(c, R_EBP), mv = U32(mebp + 4) == 0x6a8d0a ? U32(mebp - 0x5c) : 0;
+    if (mv && (U32(mv) != 0xb964c0 || U32(mv + 0x58) != p->player)) mv = 0;
+    int ch = aspect_movie_rows(p->w, p->h, mv ? U32(mv + 0x24) != 0 : 1), top = (p->h - ch) / 2;   // 16:10: picture rows
     if (ch == p->h)
         for (int y = 0; y < p->h; y++) memcpy(GM(dib + y * row), p->frame + (size_t)(p->h - 1 - y) * row, row);   // bottom-up
     else {

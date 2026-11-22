@@ -17,7 +17,11 @@
 #define R_EAX 0x0
 #define R_ECX 0x4
 #define R_EDX 0x8
+#define R_EBX 0xc
 #define R_ESP 0x10
+#define R_EBP 0x14
+#define R_ESI 0x18
+#define R_EDI 0x1c
 #define R_FS_OFFSET 0x110
 #define REG(c, off) V((c)->r + (off), uint32_t)
 #define U32(a) V(GM(a), uint32_t)
@@ -57,8 +61,9 @@ uint32_t dll_export(uint32_t base, uint32_t name);
 uint32_t stdio_iob(void);       // stdio.c: msvcrt's _iob[3] (stdin, stdout, stderr)
 Fn steam_resolve(uint32_t t);   // steam.c: guest Steam interface method stubs
 void aspect_init(int sw, int sh);   // aspect.c: 16:10 picture once the screen size is known
-int aspect_movie_rows(int w, int h);   // aspect.c: rows of picture for a 16:9 movie frame (letterboxed on 16:10)
+int aspect_movie_rows(int w, int h, int own_sprite);   // aspect.c: rows of picture for a 16:9 movie frame (letterboxed on 16:10)
 void aspect_scene_size(uint32_t bw, uint32_t bh);   // aspect.c: scene render targets at the back buffer size (Reset)
+void aspect_ui_projection(CPU *c);   // aspect.c: 2D UI band, from the SetTransform bridge
 Fn d3d9_resolve(uint32_t t);    // d3d9_bridge.cpp: guest D3D9 COM method stubs
 
 // threads (sync.c)
