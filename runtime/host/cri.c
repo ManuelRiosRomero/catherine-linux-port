@@ -21,6 +21,11 @@
 // CRI dummy output worker thread (stdcall, param = output object)
 NATIVE(0x7a4b10, cri_output_worker) {
     uint32_t o = ARG(c, 0), rate = U32(o + O_RATE), ptrs = gmalloc(6 * 4);
+    // The output's device count (vtable slot +0x18) gates every "is a voice still playing" check of the game (message
+    // window 0x5ced80: lines wait for their voice; 0x792250 and ~8 more). XAudio2's answers GetDeviceCount (>= 1 on a
+    // PC); the dummy's slot (0xba361c + 0x18) points at a shared return-0 stub, so lines advanced when typing ended and
+    // cut the voice. We do have a device: point the slot at the exe's own "mov eax,1; ret" (0x571bc0).
+    U32(0xba3634) = 0x571bc0;
     for (int k = 0; k < 6; k++) U32(ptrs + 4 * k) = o + O_BUFS + 0x4000 * k;
     SDL_AudioStream *s = NULL;
     // CRI's 6 channels are FL FR BL BR FC LFE (measured: during music 2+3 carry a matched ambience pair and 4+5 are
