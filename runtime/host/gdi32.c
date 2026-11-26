@@ -174,7 +174,17 @@ IMP(G, TextOutW) {   // (dc, x, y, str, n): top-left alignment, transparent back
     if (d && b && f) {
         uint32_t col = rgb(d->text_color);
         FT_Pos pen = (FT_Pos)x * 64;
+        static uint8_t seen[0x10000 / 8];   // CATH_TRACE_GDI=1: each character the font has no glyph for, once
         for (int i = 0; i < n; i++) {
+            if (getenv("CATH_TRACE_GDI") && !FT_Get_Char_Index(f->face, s[i]) && !(seen[s[i] / 8] & 1 << s[i] % 8)) {
+                seen[s[i] / 8] |= 1 << s[i] % 8;
+                fprintf(stderr, "[gdi32] TextOutW U+%04X: no glyph in \"%s\"\n", s[i], f->face->family_name);
+            }
+            // Windows GDI draws nothing and moves the pen 0 for these when the font has no glyph (measured with the
+            // game's fonts); FreeType would draw the .notdef box. Phone mails start paragraphs with a '\n' the game's
+            // line splitter (0x56b5f0) leaves in, and its glyph cache (0x5d4350) draws it over the next letter.
+            uint16_t ch = s[i];
+            if ((ch == 9 || ch == 10 || ch == 13 || (ch >= 0x1c && ch <= 0x1f)) && !FT_Get_Char_Index(f->face, ch)) continue;
             if (FT_Load_Char(f->face, s[i], FT_LOAD_RENDER)) continue;
             FT_GlyphSlot g = f->face->glyph;
             int gx = (int)(pen >> 6) + g->bitmap_left, gy = y + f->ascent - g->bitmap_top;

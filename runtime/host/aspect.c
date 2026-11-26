@@ -83,7 +83,11 @@ int aspect_movie_rows(int w, int h, int own_sprite) {
 // vertices on or beyond the top/bottom canvas edge move out to the screen edge (fades, dims, bars, the 0x5c9280 tile
 // wipe reach the margins), textured polygons over the whole canvas (backdrops, the full-screen movie sprite) are drawn
 // full height again, and polygons lying entirely above or below the canvas (parked, invisible in the original) are
-// moved far off screen so they cannot show in the margins.
+// moved far off screen so they cannot show in the margins. The phone (0x57e1c0, drawn through vtable slot 0xb75f2c) is
+// laid out to end just past the bottom of a 16:9 screen (rest: canvas y -120..725, put away: top at 720..730 and still
+// drawn, flipping): it moves down by the bottom margin as a whole, so it runs off the screen bottom as in the original
+// instead of ending above it, and put away it stays off screen (it flashed in the bottom margin every ~3 s).
+// Report: build/tmp/phone_static.md (session 15).
 #define EDGE_Y (0.5f / 720)    // half a canvas pixel
 #define EDGE_X (0.5f / 1280)
 static float xmmf(CPU *c, int i) { float f; memcpy(&f, &REG(c, 0x1200 + 0x40 * i), 4); return f; }   // XMMi lane 0
@@ -108,16 +112,33 @@ static int sprite_layer(uint32_t e, uint32_t ret, uint32_t *tex) {   // banded s
     }
     return -1;
 }
-static void full_screen_2d(uint32_t e, uint32_t ret, uint32_t v, int n, int whole) {
+static int drawing_phone(CPU *c) {   // 0x57e1c0 within 8 EBP frames (its draw path 0x55f090 -> 0x55e940/0x55e3d0 ->
+    uint32_t esp = REG(c, R_ESP), ebp = REG(c, R_EBP);   // 0x5f0f40/0x5f11c0 keeps EBP frames)
+    for (int i = 0; i < 8 && ebp > esp && ebp - esp < 0x40000; i++) {
+        uint32_t r = U32(ebp + 4), up = U32(ebp);
+        // a return address inside 0x57e1c0, or inside 0x57ecb0 (no EBP frame of its own; called only by 0x57e1c0 in
+        // phone modes 5-8, 10, 11, it draws 11 sprites through 0x57f540)
+        if ((r >= 0x57e1f2 && r <= 0x57e69b) || r == 0x57ed0e) return 1;
+        if (up <= ebp) break;
+        ebp = up;
+    }
+    return 0;
+}
+static void full_screen_2d(CPU *c, uint32_t e, uint32_t ret, uint32_t v, int n, int whole) {
     if (!ui_f) return;
     float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;   // cheap geometry first: most calls (text glyphs) stop here
     for (int i = 0; i < n; i++) {
         float x = V(GM(v + 12 * i), float), y = V(GM(v + 12 * i + 4), float);
         x0 = fminf(x0, x), x1 = fmaxf(x1, x), y0 = fminf(y0, y), y1 = fmaxf(y1, y);
     }
+    uint32_t tex;
+    if (!(x0 <= EDGE_X && x1 >= 1 - EDGE_X) && drawing_phone(c)) {   // phone parts (not full-width fades): moved down
+        if (sprite_layer(e, ret, &tex) < 0) return;
+        for (int i = 0; i < n; i++) V(GM(v + 12 * i + 4), float) += 0.5f / ui_f - 0.5f;   // canvas bottom -> screen bottom
+        return;
+    }
     int outside = n > 1 && (y0 >= 1 || y1 <= 0);
     if (!outside && y0 > EDGE_Y && y1 < 1 - EDGE_Y) return;
-    uint32_t tex;
     int k = sprite_layer(e, ret, &tex);
     if (k < 0) return;
     if (outside) {
@@ -141,7 +162,7 @@ NATIVE(0x87fac0, NiScreenElements_SetRectangle) {
     uint32_t v = lock_pos(c, e) + 12 * V(GM(pl + 2), uint16_t);
     float r = x + w, b = y + h, q[4][2] = {{x, y}, {x, b}, {r, b}, {r, y}};
     for (int i = 0; i < 4; i++) V(GM(v + 12 * i), float) = q[i][0], V(GM(v + 12 * i + 4), float) = q[i][1], U32(v + 12 * i + 8) = 0;
-    full_screen_2d(e, ret, v, 4, 1);
+    full_screen_2d(c, e, ret, v, 4, 1);
     unlock_pos(c, e);
     ret_std(c, 1, 3);
 }
@@ -152,7 +173,7 @@ NATIVE(0x87f9f0, NiScreenElements_SetVertices) {
     int n = V(GM(pl), uint16_t);
     uint32_t v = lock_pos(c, e) + 12 * V(GM(pl + 2), uint16_t);
     for (int i = 0; i < n; i++) U32(v + 12 * i) = U32(pts + 8 * i), U32(v + 12 * i + 4) = U32(pts + 8 * i + 4), U32(v + 12 * i + 8) = 0;
-    full_screen_2d(e, ret, v, n, 1);
+    full_screen_2d(c, e, ret, v, n, 1);
     unlock_pos(c, e);
     ret_std(c, 1, 2);
 }
@@ -163,7 +184,7 @@ NATIVE(0x87f960, NiScreenElements_SetVertex) {
     if (!pl || i < 0 || i >= V(GM(pl), uint16_t)) { ret_std(c, 0, 3); return; }
     uint32_t v = lock_pos(c, e) + 12 * (V(GM(pl + 2), uint16_t) + i);
     U32(v) = U32(pt), U32(v + 4) = U32(pt + 4), U32(v + 8) = 0;
-    full_screen_2d(e, ret, v, 1, 0);   // one vertex: the flat edge rule only
+    full_screen_2d(c, e, ret, v, 1, 0);   // one vertex: the flat edge rule (and the phone move) only
     unlock_pos(c, e);
     ret_std(c, 1, 3);
 }
